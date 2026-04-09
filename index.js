@@ -4,27 +4,36 @@ const path = require('path');
 const app = express();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const bot = new Telegraf(BOT_TOKEN);
+const API_DOMAIN = process.env.TELEGRAM_API_DOMAIN;
+
+// الربط بالسيرفر الخاص بك لدعم الأحجام الكبيرة والسرعة
+const bot = new Telegraf(BOT_TOKEN, {
+    telegram: { apiRoot: `https://${API_DOMAIN}` }
+});
 
 const videoStorage = new Map();
 
-// أضفنا هذا الجزء لكي يرد البوت عند الضغط على Start
 bot.start((ctx) => {
-    ctx.reply('أهلاً بك! أرسل لي أي فيديو وسأقوم بتحويله إلى رابط مشاهدة مباشر.');
+    ctx.reply('🚀 البوت شغال الآن بنظام السيرفر الخاص! أرسل أي فيديو (حتى الأفلام الطويلة) وسأعطيك رابط مشاهدة سريع.');
 });
 
+// عرض صفحة المشغل
 app.get('/v/:id', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// API جلب الفيديو
 app.get('/api/video/:id', async (req, res) => {
     const fileId = videoStorage.get(req.params.id);
-    if (!fileId) return res.status(404).send('Video not found');
+    if (!fileId) return res.status(404).send('الفيديو غير موجود');
+    
     try {
-        const link = await bot.telegram.getFileLink(fileId);
-        res.redirect(link.href);
+        const file = await bot.telegram.getFile(fileId);
+        // الرابط المباشر من سيرفرك الخاص
+        const directUrl = `https://${API_DOMAIN}/file/bot${BOT_TOKEN}/${file.file_path}`;
+        res.redirect(directUrl);
     } catch (e) {
-        res.status(500).send('Error fetching video');
+        res.status(500).send('خطأ في الاتصال بسيرفر الفيديو');
     }
 });
 
@@ -34,16 +43,15 @@ bot.on('video', async (ctx) => {
         const uniqueId = Math.random().toString(36).substring(7);
         videoStorage.set(uniqueId, fileId);
 
-        // تعديل مهم: نستخدم الرابط الظاهر في صورتك
-        const domain = 'watch-production-2c42.up.railway.app'; 
+        // رابط Railway الخاص ببوتك (خدمة Watch)
+        const domain = process.env.RAILWAY_PUBLIC_DOMAIN;
         const playerLink = `https://${domain}/v/${uniqueId}`;
         
-        await ctx.reply(`✅ تم تجهيز الرابط:\n${playerLink}`);
-    } catch (error) {
-        console.error(error);
+        await ctx.reply(`🎬 جاهز للمشاهدة:\n${playerLink}`);
+    } catch (err) {
         ctx.reply('حدث خطأ أثناء معالجة الفيديو.');
     }
 });
 
 bot.launch();
-app.listen(process.env.PORT || 8080, () => console.log('Server Ready!'));
+app.listen(process.env.PORT || 8080, () => console.log('Bot is Ready!'));
